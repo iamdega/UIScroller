@@ -1,0 +1,10 @@
+Package: ddgg.uiscroller
+Name: UIScroller
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Rest your fingers, automate scrolling any pages!
+Maintainer: @iamdega
+Author: @iamdega
+Section: Tweaks
+Depends: mobilesubstrate (>= 0.9.5000)
+Icon: https://i.postimg.cc/qRD5kq6z/UIScroller-1.png
