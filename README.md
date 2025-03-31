@@ -1,5 +1,5 @@
 ## UIScroller
-Rest your fingers, automate scrolling any pages on iOS!
+UIScroller is an intelligent iOS enhancement that transforms your scrolling experience with intuitive auto-scrolling capabilities. Perfect for reading long articles, browsing social media, or any content that requires continuous scrolling
 
 ## How to open the menu?
 When you are inside an app, long-press your screen with 2 fingers, the menu will show up.

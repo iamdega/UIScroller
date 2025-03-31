@@ -14,8 +14,8 @@ FINALPACKAGE = 1
 TARGET = iphone:clang:latest:14.0
 INSTALL_TARGET_PROCESSES = SpringBoard
 
-# Comment this line for rootful jailbreak
-THEOS_PACKAGE_SCHEME = rootless
+# build for rootful, rootless, or roothide
+THEOS_PACKAGE_SCHEME = roothide
 
 # Theos
 include $(THEOS)/makefiles/common.mk

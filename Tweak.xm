@@ -1,4 +1,3 @@
-
 #import <UIKit/UIKit.h>
 
 @interface UIScrollView (UIScroller)
@@ -10,8 +9,10 @@
 @end
 
 NSTimer *timer = nil;
+NSTimer *autoDisableTimer = nil;
 BOOL verticalDown = NO;
-int scrollSpeedType = 0; // 0: Normal, 1: Medium, 2: Fast
+int scrollSpeedType = 0; // 0: Slow, 1: Normal, 2: Medium, 3: Fast
+int autoDisableMinutes = 0; // 0: Disabled, >0: Minutes until auto-disable
 
 id topViewController() {
     // Initialize a UIWindow instance to store the key window
@@ -53,10 +54,59 @@ void openSimpleMenu() {
                                         message:nil
                                         preferredStyle:UIAlertControllerStyleAlert];
         // Action(s)
-        UIAlertAction *speed = [UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Speed: %@", scrollSpeedType == 2 ? @"Fast" : (scrollSpeedType == 1 ? @"Medium" : @"Normal")] style:UIAlertActionStyleDefault
+        UIAlertAction *speed = [UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Speed: %@", scrollSpeedType == 3 ? @"Fast" : (scrollSpeedType == 2 ? @"Medium" : (scrollSpeedType == 1 ? @"Normal" : @"Slow"))] style:UIAlertActionStyleDefault
                                 handler:^(UIAlertAction *action) {
-                                    if (scrollSpeedType == 2) scrollSpeedType = 0; 
+                                    if (scrollSpeedType == 3) scrollSpeedType = 0; 
                                     else scrollSpeedType += 1;
+                                }];
+        UIAlertAction *autoDisable = [UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Auto-disable: %@", autoDisableMinutes == 0 ? @"Off" : [NSString stringWithFormat:@"%d min", autoDisableMinutes]] style:UIAlertActionStyleDefault
+                                handler:^(UIAlertAction *action) {
+                                    // Show input alert
+                                    UIAlertController *inputAlert = [UIAlertController alertControllerWithTitle:@"Set auto-disable Timer"
+                                                                                                      message:@"Enter minutes (0 to disable)"
+                                                                                               preferredStyle:UIAlertControllerStyleAlert];
+                                    
+                                    [inputAlert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+                                        textField.keyboardType = UIKeyboardTypeNumberPad;
+                                        textField.placeholder = @"Minutes";
+                                        textField.text = [NSString stringWithFormat:@"%d", autoDisableMinutes];
+                                    }];
+                                    
+                                    UIAlertAction *confirmAction = [UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault
+                                        handler:^(UIAlertAction *action) {
+                                            NSString *input = inputAlert.textFields.firstObject.text;
+                                            int minutes = [input intValue];
+                                            
+                                            // Validate input (max 180 minutes = 3 hours)
+                                            if (minutes < 0) minutes = 0;
+                                            if (minutes > 180) minutes = 180;
+                                            
+                                            autoDisableMinutes = minutes;
+                                            
+                                            // Cancel existing auto-disable timer
+                                            if (autoDisableTimer) {
+                                                [autoDisableTimer invalidate];
+                                                autoDisableTimer = nil;
+                                            }
+                                            
+                                            // Show confirmation
+                                            NSString *message = autoDisableMinutes == 0 ? 
+                                                @"Auto-disable timer disabled" : 
+                                                [NSString stringWithFormat:@"Auto-disable timer set to %d minutes", autoDisableMinutes];
+                                            
+                                            UIAlertController *confirmation = [UIAlertController alertControllerWithTitle:@"Timer Updated"
+                                                                                                                message:message
+                                                                                                         preferredStyle:UIAlertControllerStyleAlert];
+                                            [confirmation addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+                                            [topViewController() presentViewController:confirmation animated:YES completion:nil];
+                                    }];
+                                    
+                                    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil];
+                                    
+                                    [inputAlert addAction:confirmAction];
+                                    [inputAlert addAction:cancelAction];
+                                    
+                                    [topViewController() presentViewController:inputAlert animated:YES completion:nil];
                                 }];
         UIAlertAction *toggle = [UIAlertAction actionWithTitle:[NSString stringWithFormat:@"%@ for this app", isDisabled ? @"Enable" : @"Disable"] style:UIAlertActionStyleDefault
                                 handler:^(UIAlertAction *action) {
@@ -66,6 +116,7 @@ void openSimpleMenu() {
         UIAlertAction *dismiss = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil];
         // Add Action to the Alert Controller
         [alert addAction:speed];
+        [alert addAction:autoDisable];
         [alert addAction:toggle];
         [alert addAction:dismiss];
         // Show the alert to the most top view controller
@@ -143,6 +194,22 @@ void openSimpleMenu() {
         [self stopUIScroller];
         // Then start scrolling
         timer = [NSTimer scheduledTimerWithTimeInterval:0.01 target:self selector:@selector(autoScroll) userInfo:nil repeats:YES];
+        
+        // Set up auto-disable timer if enabled
+        if (autoDisableMinutes > 0) {
+            // Cancel existing auto-disable timer if any
+            if (autoDisableTimer) {
+                [autoDisableTimer invalidate];
+                autoDisableTimer = nil;
+            }
+            
+            // Create new auto-disable timer
+            autoDisableTimer = [NSTimer scheduledTimerWithTimeInterval:autoDisableMinutes * 60 
+                                                              target:self 
+                                                            selector:@selector(autoDisableScrolling) 
+                                                            userInfo:nil 
+                                                             repeats:NO];
+        }
     }
 
     %new
@@ -160,8 +227,10 @@ void openSimpleMenu() {
         CGPoint offset = self.contentOffset;
 
         // Adjust based on user's prefs
-        if (scrollSpeedType == 1) scrollSpeed = 1.5;
-        else if (scrollSpeedType == 2) scrollSpeed = 2.0;
+        if (scrollSpeedType == 0) scrollSpeed = 0.5; // Slow
+        else if (scrollSpeedType == 1) scrollSpeed = 1.0; // Normal
+        else if (scrollSpeedType == 2) scrollSpeed = 1.5; // Medium
+        else if (scrollSpeedType == 3) scrollSpeed = 2.0; // Fast
 
         // Condition
         if (verticalDown) offset.y += scrollSpeed;
@@ -175,6 +244,24 @@ void openSimpleMenu() {
 
         // Scroll the target content offset
         [self setContentOffset:offset animated:NO];
+    }
+
+    %new
+    - (void)autoDisableScrolling {
+        // Stop the scrolling
+        [self stopUIScroller];
+        
+        // Reset the auto-disable timer
+        [autoDisableTimer invalidate];
+        autoDisableTimer = nil;
+        
+        // Show a notification to the user
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"UIScroller"
+                                                                     message:@"Auto-scrolling has been automatically disabled"
+                                                              preferredStyle:UIAlertControllerStyleAlert];
+        UIAlertAction *ok = [UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil];
+        [alert addAction:ok];
+        [topViewController() presentViewController:alert animated:YES completion:nil];
     }
 
 %end
